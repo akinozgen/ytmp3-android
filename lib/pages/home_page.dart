@@ -37,8 +37,33 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     print("calling");
+    hasTheTimeCome(() {
+      catchSharedVideo();
+    });
 
+    getHistory();
+  }
+
+  void hasTheTimeCome(callback) {
+    var now = DateTime.now().millisecondsSinceEpoch;
+    var target = DateTime.parse("2020-07-01T01:00:00").millisecondsSinceEpoch;
+
+    if (now >= target) {
+      callback();
+    } else {
+      print("The time hasn't come yet");
+    }
+  }
+
+  void catchSharedVideo() {
     _intentStream = ReceiveSharingIntent.getTextStream().listen((String value) {
+      if (_isDownloading == true) {
+        Scaffold.of(context).showSnackBar(SnackBar(
+          content: Text("Önceki indirme işleminin tamamlanmasını bekleyin.")
+        ));
+        return;
+      }
+
       if (value.length > 0) {
         setState(() {
           _sharedText = value.split('/').last;
@@ -58,8 +83,6 @@ class _HomePageState extends State<HomePage> {
         });
       }
     });
-
-    getHistory();
   }
 
   void getHistory() async {
@@ -80,11 +103,6 @@ class _HomePageState extends State<HomePage> {
         title +
         ".mp3";
 
-    downloadFile(url,
-        id: videoId,
-        filename: (snippet['title'] + ".mp3"),
-        path: downloadsPath,
-        snippet: snippet);
     setState(() {
       var dialog =  new ProgressDialog(context, type: ProgressDialogType.Download, isDismissible: false, showLogs: true);
       dialog.style(
@@ -103,7 +121,14 @@ class _HomePageState extends State<HomePage> {
         );
         _progressDialog = dialog;
     });
-    Navigator.of(context).pop(false);
+
+    downloadFile(url,
+        id: videoId,
+        filename: (snippet['title'] + ".mp3"),
+        path: downloadsPath,
+        snippet: snippet);
+
+    // Navigator.of(context).pop(false);
     await _progressDialog.show();
   }
 
@@ -232,7 +257,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void handleAction(snippet, action) async {
+  void handleHistoryItemAction(snippet, action) async {
     switch (action) {
       case 'play':
         OpenFile.open(snippet['filename']);
@@ -256,47 +281,108 @@ class _HomePageState extends State<HomePage> {
   }
 
   String getThumbnailURL(_item) {
+    if (_item['thumbnail'] != null) return _item['thumbnail'];
     return _item['thumbnails']['maxres'] != null ? _item['thumbnails']['maxres']['url'] : _item['thumbnails']['default']['url'];
   }
 
-  Widget historyListItem(_item) {
+  Widget historyListItem(_item, index) {
     var actions = [
       { "action": "play", "text": "Oynat" },
       { "action": "delete_history", "text": "Geçmişten Sil" },
       File(_item['filename']).existsSync() ? { "action": "delete_file", "text": "Dosyayı Sil" } : { "action": "re_download", "text": "Tekrar İndir" },
       { "action": "share", "text": "Paylaş" }
     ];
-    return Container(
-      padding: EdgeInsets.only(bottom: 16, left: 10, right: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.all(
-          Radius.circular(5)
-        ),
-        onLongPress: () {
+
+    var listTile = ListTile(
+      title: Text(_item['title']),
+      subtitle: Text(_item['channelTitle']),
+      leading: Image(image: NetworkImage(getThumbnailURL(_item)), width: 100, fit: BoxFit.cover),
+      trailing: PopupMenuButton(
+        captureInheritedThemes: true,
+        onSelected: (_) {
+          var params = _.split(',');
+          handleHistoryItemAction(_item, params[1]);
         },
-        child: ListTile(
-          title: Text(_item['title']),
-          subtitle: Text(_item['channelTitle']),
-          leading: Image(image: NetworkImage(getThumbnailURL(_item))),
-          trailing: PopupMenuButton(
-            captureInheritedThemes: true,
-            onSelected: (_) {
-              var params = _.split(',');
-              handleAction(_item, params[1]);
-            },
-            icon: Icon(Icons.more_vert),
-            itemBuilder: (BuildContext context) {
-              return actions.map((text) {
-                return PopupMenuItem(
-                  value: _item['id'] + ',' + text['action'],
-                  child: Text(text['text']),
-                );
-              }).toList();
-            },
-          ),
-        ),
+        icon: Icon(Icons.more_vert),
+        itemBuilder: (BuildContext context) {
+          return actions.map((text) {
+            return PopupMenuItem(
+              value: _item['id'] + ',' + text['action'],
+              child: Text(text['text']),
+            );
+          }).toList();
+        },
       ),
     );
+
+    if (index == 0) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[Padding(
+          padding: const EdgeInsets.only(left: 16, top: 20, bottom: 10),
+          child: Text("İndirmelerim", style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w400
+          )),
+        ), listTile],
+      );
+    }
+
+    return listTile;
+  }
+
+  void handleSearchItemAction(snippet, action) {
+    switch (action) {
+      case 'download':
+        requestPermissions(() => download(snippet['id'], snippet['id'], snippet));
+        break;
+      default:
+    }
+  }
+
+  Widget searchListItem(_item, index) {
+    var actions = [
+      { "action": "download", "text": "İndir" }
+    ];
+
+    var listTile = ListTile(
+      title: Text(_item['title']),
+      subtitle: Text(_item['channelTitle']),
+      leading: Image(image: NetworkImage(_item['thumbnail']), width: 100, fit: BoxFit.cover),
+      trailing: PopupMenuButton(
+        captureInheritedThemes: true,
+        onSelected: (_) {
+          var params = _.split(',');
+          handleSearchItemAction(_item, params[1]);
+        },
+        icon: Icon(Icons.more_vert),
+        itemBuilder: (BuildContext context) {
+          return actions.map((text) {
+            return PopupMenuItem(
+              value: _item['id'] + ',' + text['action'],
+              child: Text(text['text']),
+            );
+          }).toList();
+        },
+      ),
+    );
+
+    if (index == 0) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[Padding(
+          padding: const EdgeInsets.only(left: 16, top: 20, bottom: 10),
+          child: Text("Arama Sonuçları", style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w400
+          )),
+        ), listTile],
+      );
+    }
+
+    return listTile;
   }
 
   void deleteFromHistory(item) async {
@@ -319,27 +405,153 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _searchAction(String text) async {
+    var results = await http.get(search_endpoint + "/get-search/" + text);
+
+    setState(() {
+      _searchResults = jsonDecode(results.body);
+    });
+  }
+
+  Widget renderAppBar() {
+    return appBarState == "Default" ? AppBar(
+        centerTitle: true,
+        title: Text('musiclick'),
+        actions: <Widget>[
+          IconButton(icon: Icon(Icons.search), onPressed: () {
+            setState(() {
+              appBarState = "Search";
+            });
+          })
+        ],
+      ) : 
+      AppBar(
+        centerTitle: true,
+        title: TextField(
+          autocorrect: true,
+          onSubmitted: _searchAction,
+          controller: _searchController,
+          maxLines: 1,
+          autofocus: true,
+          keyboardType: TextInputType.text,
+          textAlign: TextAlign.center,
+        ),
+        actions: <Widget>[
+          IconButton(icon: Icon(Icons.close), onPressed: () {
+            setState(() {
+              appBarState = "Default";
+            });
+          })
+        ],
+      );
+  }
+
+  Widget renderDefaultWelcome() {
+    var thirdLine = null;
+
+    hasTheTimeCome(() {
+      thirdLine = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Text("veya YouTube uygulaması üzerinden paylaş seçeneğini kullanarak musiclick'i seçebilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+      );
+    });
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20.0),
+            child: Text("İndirmeye başlamak için:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text("Uygulama üzerinden arama yapabilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+          ),
+          thirdLine != null ? thirdLine : Text("")
+        ],
+      ),
+    );
+  }
+
+  Widget renderSearchWelcome() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20.0),
+            child: Text("Arama yapmak için:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text("Arama çubuğuna istediğiniz sorguyu yazdıktan sonra Tamam/Enter'a basın. Çıkan sonuçlardan istediğin parçanın seçenekler menüsünden İndir'e basın.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget renderMainListView() {
+    if ( (_history == null || _history.length == 0) && appBarState == "Default" ) return renderDefaultWelcome();
+    if ( (_searchResults == null || _searchResults.length == 0) && appBarState == "Search" ) return renderSearchWelcome();
+
+    return appBarState == "Default" ? ListView.builder(
+      padding: EdgeInsets.only(top: 8),
+      itemCount: _history != null ? _history.length : 0,
+      itemBuilder: (context, index) {
+        return historyListItem(_history[index], index);
+      },
+    ) : ListView.builder(
+      padding: EdgeInsets.only(top: 8),
+      itemCount: _searchResults != null ? _searchResults.length : 0,
+      itemBuilder: (context, index) {
+        return searchListItem(_searchResults[index], index);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: Text('MP3 İndir'),
-        leading: IconButton(tooltip: "Son İndirmeler", icon: Icon(Icons.history), onPressed: () {
-          Navigator.of(context).pushNamed('/last_downloaded');
-        }),
-      ),
-      body: RefreshIndicator(
-        child: ListView.builder(
-          padding: EdgeInsets.only(top: 16),
-          itemCount: _history != null ? _history.length : 0,
-          itemBuilder: (context, index) {
-            return historyListItem(_history[index]);
+    return WillPopScope(
+      onWillPop: () async {
+        if (appBarState != "Search") return true;
+
+        setState(() {
+          appBarState = "Default";
+        });
+
+        return false;
+      },
+      child: Scaffold(
+        drawer: Drawer(
+          child: ListView(
+            children: <Widget>[
+              UserAccountsDrawerHeader(
+                accountName: Text("Ziyaretçi"),
+                decoration: BoxDecoration(
+                  image: DecorationImage(image: AssetImage("lib/assets/images/defaultbg.jpg"), fit: BoxFit.cover)
+                ),
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).pushNamed('/last_downloaded');
+                },
+                child: ListTile(
+                  leading: Icon(Icons.history),
+                  title: Text("Son İndirilenler"),
+                ),
+              )
+            ],
+          ),
+        ),
+        appBar: renderAppBar(),
+        body: RefreshIndicator(
+          child: renderMainListView(),
+          onRefresh: () async {
+            await getHistory();
           },
         ),
-        onRefresh: () async {
-          await getHistory();
-        },
       ),
     );
   }
