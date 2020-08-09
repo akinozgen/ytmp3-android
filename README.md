@@ -15,6 +15,11 @@ To run;
 To build;
 `flutter build apk # or whatever for ios is...`
 
+To signed build;
+* Generate a keystore first: `keytool -genkey -v -keystore my-release-key.jks -alias alias_name -keyalg RSA -keysize 2048 -validity 10000`
+* Rename `android/key-example.properties` file to `android/key.properties` and fill it with your keystore information.
+* Then build again.
+
 ### Screenshots
 <table width="100%">
     <tr>
