@@ -37,22 +37,9 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     print("calling");
-    hasTheTimeCome(() {
-      catchSharedVideo();
-    });
+    catchSharedVideo();
 
     getHistory();
-  }
-
-  void hasTheTimeCome(callback) {
-    var now = DateTime.now().millisecondsSinceEpoch;
-    var target = DateTime.parse("2020-07-01T01:00:00").millisecondsSinceEpoch;
-
-    if (now >= target) {
-      callback();
-    } else {
-      print("The time hasn't come yet");
-    }
   }
 
   void catchSharedVideo() {
@@ -449,12 +436,10 @@ class _HomePageState extends State<HomePage> {
   Widget renderDefaultWelcome() {
     var thirdLine = null;
 
-    hasTheTimeCome(() {
-      thirdLine = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Text("veya YouTube uygulaması üzerinden paylaş seçeneğini kullanarak musiclick'i seçebilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
-      );
-    });
+    thirdLine = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Text("veya YouTube uygulaması üzerinden paylaş seçeneğini kullanarak musiclick'i seçebilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+    );
 
     return Center(
       child: Column(
