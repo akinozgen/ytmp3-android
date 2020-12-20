@@ -12,6 +12,7 @@ import 'package:ext_storage/ext_storage.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:share_extend/share_extend.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ytmp3/components/musiclick_appdrawer.dart';
 
 
 class HomePage extends StatefulWidget {
@@ -22,9 +23,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   String appBarState = "Default";
   TextEditingController _searchController = new TextEditingController();
-  final String search_endpoint = "http://yourdomainname";
+  final String search_endpoint = "http://127.0.0.1:8080";
   List<dynamic> _searchResults;
   String _sharedText = "";
   StreamSubscription _intentStream;
@@ -32,6 +34,7 @@ class _HomePageState extends State<HomePage> {
   bool _isDownloading = false;
   int _downloadingProgress = 0;
   ProgressDialog _progressDialog;
+  List<dynamic> _queue = [];
 
   @override
   void initState() {
@@ -42,11 +45,13 @@ class _HomePageState extends State<HomePage> {
     getHistory();
   }
 
+  // when you share from youtube to musiclick this function catches this action and starts a downloading action.
   void catchSharedVideo() {
+    // This intent catches share action when app is running in background
     _intentStream = ReceiveSharingIntent.getTextStream().listen((String value) {
       if (_isDownloading == true) {
         Scaffold.of(context).showSnackBar(SnackBar(
-          content: Text("Önceki indirme işleminin tamamlanmasını bekleyin.")
+          content: Text("Please wait for previous download to finish.")
         ));
         return;
       }
@@ -61,7 +66,7 @@ class _HomePageState extends State<HomePage> {
       print("getLinkStream error: $err");
     });
 
-    // For sharing or opening urls/text coming from outside the app while the app is closed
+    // This intent catches share action when app is completely closed
     ReceiveSharingIntent.getInitialText().then((String value) {
       if (value.length > 0) {
         setState(() {
@@ -72,6 +77,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Loads history of downloaded songs from persistent memory. then sets as state 
   void getHistory() async {
     final prefs = await SharedPreferences.getInstance();
     List<dynamic> history = jsonDecode(
@@ -81,10 +87,11 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // this function opens a download dialog and start downloading process
   void download( String videoId, String title, Map<dynamic, dynamic> snippet) async {
     var downloadsPath = await ExtStorage.getExternalStoragePublicDirectory(
         ExtStorage.DIRECTORY_MUSIC);
-    String url = "http://ytmp3serverandroid001.tk/get-mp3/" +
+    String url = search_endpoint + "/get-mp3/" +
         videoId +
         "/" +
         title +
@@ -93,7 +100,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       var dialog =  new ProgressDialog(context, type: ProgressDialogType.Download, isDismissible: false, showLogs: true);
       dialog.style(
-        message: snippet['title'] + " dönüştürülüyor.",
+        message: snippet['title'] + " now converting.",
         borderRadius: 6.0,
         backgroundColor: Colors.white,
         progressWidget: CircularProgressIndicator(),
@@ -119,6 +126,7 @@ class _HomePageState extends State<HomePage> {
     await _progressDialog.show();
   }
 
+  // This function opens a http connection and pipes that response to persisten storage.
   void downloadFile(String url, {String id, String filename, String path, Map<dynamic, dynamic> snippet}) async {
     var httpClient = http.Client();
     print("Request sent.");
@@ -140,7 +148,7 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           var percentage = downloaded / r.contentLength * 100;
           _downloadingProgress = percentage.toInt();
-          _progressDialog != null ? _progressDialog.update(progress: percentage.toInt().toDouble(), message: snippet['title'] + " indiriliyor...",) : null;
+          _progressDialog != null ? _progressDialog.update(progress: percentage.toInt().toDouble(), message: snippet['title'] + " downloading...",) : null;
         });
 
         chunks.add(chunk);
@@ -151,9 +159,9 @@ class _HomePageState extends State<HomePage> {
 
         // Save the file
         String disposition = (r.headers['content-disposition']);
-        String filename = disposition.split('filename=')[1];
+        String filename = disposition.split('filename=')[1].split(" ").join("_");
 
-        File file = new File('$dir/$filename');
+        File file = new File("$dir/$filename");
         final Uint8List bytes = Uint8List(r.contentLength);
         int offset = 0;
         for (List<int> chunk in chunks) {
@@ -178,11 +186,21 @@ class _HomePageState extends State<HomePage> {
           _progressDialog.update(progress: 0);
         });
         await _progressDialog.hide();
+
+        showConfirmationSnackBar(filename);
+
         return;
       });
     });
   }
 
+  void showConfirmationSnackBar(String title) {
+    _scaffoldKey.currentState.showSnackBar(SnackBar(
+      content: Text(title + " Downloaded.")
+    ));
+  }
+
+  // Newer mobile versions requires permission grants. This function shows storage permission dialog for accepting.
   void requestPermissions(callback) async {
     if (!(await Permission.storage.request().isGranted)) {
       await Permission.storage.request();
@@ -194,12 +212,14 @@ class _HomePageState extends State<HomePage> {
 
   void refreshVideoInfo() async {
     var results = await http.get(search_endpoint + "/get-info/" + _sharedText);
+    var body = jsonDecode(results.body);
 
     if (results.statusCode == 200) {
-      showVideo(jsonDecode(results.body));
+      download( _sharedText, body['items'][0]['snippet']['title'], body['items'][0]['snippet']);
     }
   }
 
+  // Shows download confirmation dialog
   void showVideo(videoInfo) {
     var snippet = videoInfo['items'][0]['snippet'];
     var thumbnail = snippet['thumbnails']['default']['url'];
@@ -217,7 +237,7 @@ class _HomePageState extends State<HomePage> {
                 child: Row(
                   mainAxisSize: MainAxisSize.max,
                   children: <Widget>[
-                    Text("İndir"),
+                    Text("Download"),
                     Padding(
                         padding: EdgeInsets.only(left: 12),
                         child: Icon(Icons.cloud_download))
@@ -244,6 +264,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // When history items rendering as list items this function returns a list of actions like play, delete or share
   void handleHistoryItemAction(snippet, action) async {
     switch (action) {
       case 'play':
@@ -258,8 +279,8 @@ class _HomePageState extends State<HomePage> {
         deleteFromHistory(snippet);
         break;
       case 're_download':
-        // download(snippet['id'], snippet['title'], snippet);
-        // deleteFromHistory(snippet);
+        download(snippet['id'], snippet['title'], snippet);
+        deleteFromHistory(snippet);
         break;
       case 'share':
         await ShareExtend.share(snippet['filename'], "file", sharePanelTitle: snippet['title'], subject: snippet['title']+'.mp3');
@@ -267,17 +288,19 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Fetches thumbnail from our server.
   String getThumbnailURL(_item) {
     if (_item['thumbnail'] != null) return _item['thumbnail'];
     return _item['thumbnails']['maxres'] != null ? _item['thumbnails']['maxres']['url'] : _item['thumbnails']['default']['url'];
   }
 
+  // Renders each downloaded list items
   Widget historyListItem(_item, index) {
     var actions = [
-      { "action": "play", "text": "Oynat" },
-      { "action": "delete_history", "text": "Geçmişten Sil" },
-      File(_item['filename']).existsSync() ? { "action": "delete_file", "text": "Dosyayı Sil" } : { "action": "re_download", "text": "Tekrar İndir" },
-      { "action": "share", "text": "Paylaş" }
+      { "action": "play", "text": "Play" },
+      { "action": "delete_history", "text": "Remove from History" },
+      File(_item['filename']).existsSync() ? { "action": "delete_file", "text": "Delete File" } : { "action": "re_download", "text": "Download Again" },
+      { "action": "share", "text": "Share" }
     ];
 
     var listTile = ListTile(
@@ -308,7 +331,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[Padding(
           padding: const EdgeInsets.only(left: 16, top: 20, bottom: 10),
-          child: Text("İndirmelerim", style: TextStyle(
+          child: Text("My Downloads", style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w400
           )),
@@ -324,13 +347,32 @@ class _HomePageState extends State<HomePage> {
       case 'download':
         requestPermissions(() => download(snippet['id'], snippet['id'], snippet));
         break;
+      case 'queue':
+        addToDownloadQueue(snippet);
+        break;
       default:
     }
   }
 
+  void addToDownloadQueue(snippet) async {
+    snippet['state'] = "waiting";
+    List<dynamic> currentQueue = _queue;
+    currentQueue.add(snippet);
+
+
+    final _prefs = await SharedPreferences.getInstance();
+    _prefs.setString('queue', jsonEncode(currentQueue));
+
+    setState(() {
+      _queue = currentQueue;
+    });
+  }
+
+  // Same as history list item renderer but for search results
   Widget searchListItem(_item, index) {
     var actions = [
-      { "action": "download", "text": "İndir" }
+      { "action": "download", "text": "Download" },
+      { "action": "queue", "text": "Add to Queue" }
     ];
 
     var listTile = ListTile(
@@ -361,7 +403,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[Padding(
           padding: const EdgeInsets.only(left: 16, top: 20, bottom: 10),
-          child: Text("Arama Sonuçları", style: TextStyle(
+          child: Text("Search Results", style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w400
           )),
@@ -372,6 +414,7 @@ class _HomePageState extends State<HomePage> {
     return listTile;
   }
 
+  // Deletes a item from history.
   void deleteFromHistory(item) async {
     var history = _history;
     history.remove(item);
@@ -382,6 +425,7 @@ class _HomePageState extends State<HomePage> {
     _prefs.setString('history', jsonEncode(history));
   }
 
+  // Helper for loading icons
   Widget circularIndicator() {
     return Theme(
       data: Theme.of(context).copyWith(accentColor: Colors.brown.shade100),
@@ -393,13 +437,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _searchAction(String text) async {
-    var results = await http.get(search_endpoint + "/get-search/" + text);
+    var results = await http.get(search_endpoint + "/get-search/" + Uri.encodeComponent(text));
 
     setState(() {
-      _searchResults = jsonDecode(results.body);
+      _searchResults = jsonDecode(results.
+      body);
     });
   }
 
+  // Renders app bar for different states like default or searchbar
   Widget renderAppBar() {
     return appBarState == "Default" ? AppBar(
         centerTitle: true,
@@ -433,12 +479,13 @@ class _HomePageState extends State<HomePage> {
       );
   }
 
+  // Shows initial text message
   Widget renderDefaultWelcome() {
     var thirdLine = null;
 
     thirdLine = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Text("veya YouTube uygulaması üzerinden paylaş seçeneğini kullanarak musiclick'i seçebilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+      child: Text("or you can share from official YouTube app to Musiclick to download.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
     );
 
     return Center(
@@ -447,11 +494,11 @@ class _HomePageState extends State<HomePage> {
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: Text("İndirmeye başlamak için:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
+            child: Text("To Start Downloading:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text("Uygulama üzerinden arama yapabilirsiniz.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+            child: Text("You can search through this app.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
           ),
           thirdLine != null ? thirdLine : Text("")
         ],
@@ -459,6 +506,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Renders search help text
   Widget renderSearchWelcome() {
     return Center(
       child: Column(
@@ -466,17 +514,18 @@ class _HomePageState extends State<HomePage> {
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.only(bottom: 20.0),
-            child: Text("Arama yapmak için:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
+            child: Text("To Search:", textAlign: TextAlign.center, style: Theme.of(context).textTheme.headline5.copyWith(color: Colors.white24)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text("Arama çubuğuna istediğiniz sorguyu yazdıktan sonra Tamam/Enter'a basın. Çıkan sonuçlardan istediğin parçanın seçenekler menüsünden İndir'e basın.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
+            child: Text("Type your search query to search field then press Enter/OK from your keyboard. Then from results, tap download.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.subtitle1.copyWith(color: Colors.white38,fontSize: 18)),
           ),
         ],
       ),
     );
   }
 
+  // Creates history listview
   Widget renderMainListView() {
     if ( (_history == null || _history.length == 0) && appBarState == "Default" ) return renderDefaultWelcome();
     if ( (_searchResults == null || _searchResults.length == 0) && appBarState == "Search" ) return renderSearchWelcome();
@@ -496,6 +545,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Creates app with sidebar drawer and refresh indicator wrapped main content
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -509,27 +559,8 @@ class _HomePageState extends State<HomePage> {
         return false;
       },
       child: Scaffold(
-        drawer: Drawer(
-          child: ListView(
-            children: <Widget>[
-              UserAccountsDrawerHeader(
-                accountName: Text("Ziyaretçi"),
-                decoration: BoxDecoration(
-                  image: DecorationImage(image: AssetImage("lib/assets/images/defaultbg.jpg"), fit: BoxFit.cover)
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  Navigator.of(context).pushNamed('/last_downloaded');
-                },
-                child: ListTile(
-                  leading: Icon(Icons.history),
-                  title: Text("Son İndirilenler"),
-                ),
-              )
-            ],
-          ),
-        ),
+        key: _scaffoldKey,
+        drawer: MusiclickAppDrawer(),
         appBar: renderAppBar(),
         body: RefreshIndicator(
           child: renderMainListView(),
