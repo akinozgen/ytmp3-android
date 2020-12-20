@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:ytmp3/pages/home_page.dart';
-import 'package:ytmp3/pages/last_downloaded.dart';
+import 'package:ytmp3/pages/queue_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,8 +26,8 @@ class MyApp extends StatelessWidget {
         '/downloads': (context) {
           return HomePage();
         },
-        '/last_downloaded': (context) {
-          return LastDownloadedsPage();
+        '/queue': (context) {
+          return QueuePage();
         }
       },
     );
