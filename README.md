@@ -19,15 +19,3 @@ To signed build;
 * Generate a keystore first: `keytool -genkey -v -keystore my-release-key.jks -alias alias_name -keyalg RSA -keysize 2048 -validity 10000`
 * Rename `android/key-example.properties` file to `android/key.properties` and fill it with your keystore information.
 * Then build again.
-
-### Screenshots
-<table width="100%">
-    <tr>
-        <td><img alt="Musiclick Screenshot 1" src="playstore/Screenshot_20200621-153520.png" width="100%" /></td>
-        <td><img alt="Musiclick Screenshot 2" src="playstore/Screenshot_20200621-153514.png" width="100%" /></td>
-        <td><img alt="Musiclick Screenshot 3" src="playstore/Screenshot_20200621-153507.png" width="100%" /></td>
-        <td><img alt="Musiclick Screenshot 4" src="playstore/Screenshot_20200621-153457.png" width="100%" /></td>
-        <td><img alt="Musiclick Screenshot 5" src="playstore/Screenshot_20200621-153442.png" width="100%" /></td>
-        <td><img alt="Musiclick Screenshot 6" src="playstore/Screenshot_20200621-153435.png" width="100%" /></td>
-    </tr>
-</table>
