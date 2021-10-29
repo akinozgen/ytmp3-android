@@ -5,7 +5,9 @@
 YouTube mp3 download app. App language is currently Turkish.
 
 ## Installation
-To use your own server check this repo [ytmp3-node](https://github.com/akinozgen/ytmp3-node)
+
+Use this command to get server code: `git submodule update --init --recursive`
+[Server Readme](https://github.com/akinozgen/ytmp3-node/tree/e331f215de6ce60ec5c79350315c97067594fa4d#readme)
 
 Then edit the server line at [lib/pages/home_page.dart:27](https://github.com/akinozgen/ytmp3-android/blob/c78505a124cac6300472f4e562a34383b658f0a9/lib/pages/home_page.dart#L27)
 
